@@ -3,47 +3,76 @@ const APPS_SCRIPT_URL =
 
 export async function onRequestPost(context) {
   try {
-    const requestBody = await context.request.text();
+    const body = await context.request.text();
 
-    const upstream = await fetch(APPS_SCRIPT_URL, {
+    const response = await fetch(APPS_SCRIPT_URL, {
       method: 'POST',
       redirect: 'follow',
       headers: {
         'Content-Type': 'text/plain;charset=utf-8'
       },
-      body: requestBody
+      body
     });
 
-    const responseText = await upstream.text();
+    const text = await response.text();
+    const contentType = response.headers.get('content-type') || '';
 
-    return new Response(responseText, {
-      status: upstream.ok ? 200 : upstream.status,
+    let parsed;
+
+    try {
+      parsed = JSON.parse(text);
+    } catch (error) {
+      return new Response(JSON.stringify({
+        ok: false,
+        error: 'Apps Script returned HTML instead of JSON.',
+        upstreamStatus: response.status,
+        upstreamUrl: response.url,
+        upstreamContentType: contentType,
+        preview: text.slice(0, 500)
+      }), {
+        status: 200,
+        headers: {
+          'Content-Type': 'application/json;charset=utf-8',
+          'Cache-Control': 'no-store'
+        }
+      });
+    }
+
+    return new Response(JSON.stringify(parsed), {
+      status: 200,
       headers: {
         'Content-Type': 'application/json;charset=utf-8',
         'Cache-Control': 'no-store'
       }
     });
+
   } catch (error) {
-    return Response.json(
-      {
-        ok: false,
-        error: error && error.message
-          ? error.message
-          : 'Cloudflare could not reach the Labour.Group backend.'
-      },
-      {
-        status: 502,
-        headers: {
-          'Cache-Control': 'no-store'
-        }
+    return new Response(JSON.stringify({
+      ok: false,
+      error: String(error && error.message ? error.message : error)
+    }), {
+      status: 200,
+      headers: {
+        'Content-Type': 'application/json;charset=utf-8',
+        'Cache-Control': 'no-store'
       }
-    );
+    });
   }
 }
 
-export function onRequestGet() {
-  return Response.json({
+export async function onRequestGet() {
+  return new Response(JSON.stringify({
     ok: true,
     service: 'Labour.Group API proxy'
+  }), {
+    status: 200,
+    headers: {
+      'Content-Type': 'application/json;charset=utf-8',
+      'Cache-Control': 'no-store'
+    }
   });
+}
+
+export async function onRequestOptions() {
+  return new Response(null, { status: 204 });
 }
